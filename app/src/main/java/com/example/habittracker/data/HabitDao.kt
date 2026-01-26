@@ -8,6 +8,9 @@ interface HabitDao {
     @Query("SELECT * FROM habits ORDER BY isFavorite DESC, createdDate DESC")
     fun getAllHabits(): Flow<List<Habit>>
 
+    @Query("SELECT * FROM habits")
+    suspend fun getAllHabitsSync(): List<Habit>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHabit(habit: Habit)
 
@@ -35,11 +38,14 @@ interface HabitDao {
     @Query("SELECT dateCompleted FROM habit_history WHERE habitId = :habitId")
     fun getHistoryDates(habitId: Int): Flow<List<Long>>
 
-    @Query("SELECT * FROM categories")
+    @Query("SELECT * FROM categories ORDER BY orderIndex ASC")
     fun getAllCategories(): Flow<List<Category>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCategory(category: Category)
+
+    @Update
+    suspend fun updateCategories(categories: List<Category>)
 
     @Delete
     suspend fun deleteCategory(category: Category)

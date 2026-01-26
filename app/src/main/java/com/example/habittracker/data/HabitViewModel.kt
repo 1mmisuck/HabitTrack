@@ -21,9 +21,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleFavorite(habit: Habit) {
-        viewModelScope.launch {
-            dao.updateHabit(habit.copy(isFavorite = !habit.isFavorite))
-        }
+        viewModelScope.launch { dao.updateHabit(habit.copy(isFavorite = !habit.isFavorite)) }
     }
 
     fun updateHabitNote(habit: Habit, newNote: String) {
@@ -31,7 +29,19 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addCategory(name: String, color: Int) {
-        viewModelScope.launch { dao.insertCategory(Category(name = name, color = color)) }
+        viewModelScope.launch {
+            val currentCount = categories.value.size
+            dao.insertCategory(Category(name = name, color = color, orderIndex = currentCount))
+        }
+    }
+
+    fun updateCategoryOrder(newList: List<Category>) {
+        viewModelScope.launch {
+            val updatedList = newList.mapIndexed { index, category ->
+                category.copy(orderIndex = index)
+            }
+            dao.updateCategories(updatedList)
+        }
     }
 
     fun deleteCategory(category: Category) {
@@ -43,7 +53,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setHabitStatus(habitId: Int, isCompleted: Boolean) {
-        val today = getBaseDate(Calendar.getInstance())
+        val today = getTodayTimestamp()
         viewModelScope.launch {
             if (isCompleted) dao.insertHistory(HabitHistory(habitId = habitId, dateCompleted = today))
             else dao.deleteHistory(habitId, today)
@@ -62,13 +72,19 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun isHabitCompletedToday(habitId: Int) = dao.isHabitCompleted(habitId, getBaseDate(Calendar.getInstance()))
-    fun getHabitStats(habitId: Int) = dao.getCompletionCount(habitId)
-    fun getHistoryDates(habitId: Int) = dao.getHistoryDates(habitId)
+    fun getAutoDays(habit: Habit): Int {
+        val diff = System.currentTimeMillis() - habit.createdDate
+        return (diff / (1000 * 60 * 60 * 24)).toInt() + 1
+    }
 
-    private fun getBaseDate(cal: Calendar): Long {
-        return cal.apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    private fun getTodayTimestamp(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
+
+    fun isHabitCompletedToday(habitId: Int) = dao.isHabitCompleted(habitId, getTodayTimestamp())
+    fun getHistoryDates(habitId: Int) = dao.getHistoryDates(habitId)
+    fun getHabitStats(habitId: Int) = dao.getCompletionCount(habitId)
 }
