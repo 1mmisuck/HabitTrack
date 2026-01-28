@@ -5,11 +5,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HabitDao {
-    @Query("SELECT * FROM habits ORDER BY isFavorite DESC, createdDate DESC")
+    @Query("SELECT * FROM habits WHERE isDeleted = 0 ORDER BY isFavorite DESC, createdDate DESC")
     fun getAllHabits(): Flow<List<Habit>>
 
-    @Query("SELECT * FROM habits")
-    suspend fun getAllHabitsSync(): List<Habit>
+    @Query("SELECT * FROM habits WHERE isDeleted = 1")
+    fun getDeletedHabits(): Flow<List<Habit>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHabit(habit: Habit)
@@ -18,7 +18,7 @@ interface HabitDao {
     suspend fun updateHabit(habit: Habit)
 
     @Delete
-    suspend fun deleteHabit(habit: Habit)
+    suspend fun hardDeleteHabit(habit: Habit)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertHistory(history: HabitHistory)
@@ -38,8 +38,11 @@ interface HabitDao {
     @Query("SELECT dateCompleted FROM habit_history WHERE habitId = :habitId")
     fun getHistoryDates(habitId: Int): Flow<List<Long>>
 
-    @Query("SELECT * FROM categories ORDER BY orderIndex ASC")
+    @Query("SELECT * FROM categories WHERE isDeleted = 0 ORDER BY orderIndex ASC")
     fun getAllCategories(): Flow<List<Category>>
+
+    @Query("SELECT * FROM categories WHERE isDeleted = 1")
+    fun getDeletedCategories(): Flow<List<Category>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCategory(category: Category)
@@ -48,5 +51,5 @@ interface HabitDao {
     suspend fun updateCategories(categories: List<Category>)
 
     @Delete
-    suspend fun deleteCategory(category: Category)
+    suspend fun hardDeleteCategory(category: Category)
 }

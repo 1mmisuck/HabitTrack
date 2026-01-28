@@ -12,6 +12,7 @@ data class Habit(
     val category: String,
     val targetDays: Int,
     val isFavorite: Boolean = false,
+    val isDeleted: Boolean = false,
     val createdDate: Long = System.currentTimeMillis()
 )
 
@@ -20,7 +21,8 @@ data class Category(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
     val color: Int,
-    val orderIndex: Int = 0
+    val orderIndex: Int = 0,
+    val isDeleted: Boolean = false
 )
 
 @Entity(
