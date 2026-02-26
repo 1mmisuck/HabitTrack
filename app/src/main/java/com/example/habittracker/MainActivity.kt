@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
@@ -47,9 +46,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.habittracker.data.Habit
-import com.example.habittracker.data.HabitViewModel
-import com.example.habittracker.data.Category
+import com.example.habittracker.data.*
 import java.util.*
 
 enum class AppLanguage { RU, EN }
@@ -66,7 +63,9 @@ object Localization {
             "congrats" to "Поздравляем!", "target_reached" to "Цель выполнена!",
             "fill_all" to "Заполни все поля!", "manage_cat" to "Категории", "bin" to "Корзина",
             "restore" to "Восстановить", "confirm_del" to "Удалить?", "cancel" to "Отмена",
-            "credits" to "Авторство", "credits_text" to "Создатель: 1mmisuck",
+            "bin_cats" to "Удаленные категории", "bin_habits" to "Удаленные привычки",
+            "credits" to "Авторство", "credits_text" to "made by 1mmisuck",
+            "hue" to "Цвет", "sat" to "Насыщенность (влево для БЕЛОГО)", "val" to "Яркость (влево для ЧЕРНОГО)",
             "mon" to "П", "tue" to "В", "wed" to "С", "thu" to "Ч", "fri" to "П", "sat" to "С", "sun" to "В"
         ),
         AppLanguage.EN to mapOf(
@@ -79,10 +78,14 @@ object Localization {
             "congrats" to "Congrats!", "target_reached" to "Goal reached!",
             "fill_all" to "Fill all fields!", "manage_cat" to "Categories", "bin" to "Bin",
             "restore" to "Restore", "confirm_del" to "Delete?", "cancel" to "Cancel",
+            "bin_cats" to "Deleted Categories", "bin_habits" to "Deleted Habits",
             "credits" to "Credits", "credits_text" to "made by 1mmisuck",
+            "hue" to "Hue", "sat" to "Saturation (left for WHITE)", "val" to "Brightness (left for BLACK)",
             "mon" to "M", "tue" to "T", "wed" to "W", "thu" to "T", "fri" to "F", "sat" to "S", "sun" to "S"
         )
     )
+    val monthsRU = listOf("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь")
+    val monthsEN = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 }
 
 class MainActivity : ComponentActivity() {
@@ -108,19 +111,8 @@ class MainActivity : ComponentActivity() {
                         composable("add_habit") { AddHabitScreen(navController, viewModel, t) }
                         composable("manage_categories") { ManageCategoriesScreen(navController, viewModel, t) }
                         composable("bin") { BinScreen(navController, viewModel, t) }
-                        composable("settings") {
-                            SettingsScreen(navController, isDark, {
-                                isDark = it
-                                prefs.edit().putBoolean("dark", it).apply()
-                            }, currentLang, {
-                                langCode = it.name
-                                prefs.edit().putString("lang", it.name).apply()
-                            }, t)
-                        }
-                        composable("details/{id}", listOf(navArgument("id") { type = NavType.IntType })) {
-                            val id = it.arguments?.getInt("id") ?: 0
-                            DetailScreen(navController, viewModel, id, t)
-                        }
+                        composable("settings") { SettingsScreen(navController, isDark, { isDark = it; prefs.edit().putBoolean("dark", it).apply() }, currentLang, { langCode = it.name; prefs.edit().putString("lang", it.name).apply() }, t) }
+                        composable("details/{id}", listOf(navArgument("id") { type = NavType.IntType })) { DetailScreen(navController, viewModel, it.arguments?.getInt("id") ?: 0, t, currentLang) }
                     }
                 }
             }
@@ -129,20 +121,34 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AdvancedColorPickerUI(onColorSelected: (Color) -> Unit) {
+fun AdvancedColorPickerUI(t: Map<String, String>, onColorSelected: (Color) -> Unit) {
     var h by remember { mutableStateOf(0f) }
+    var s by remember { mutableStateOf(1f) }
     var v by remember { mutableStateOf(1f) }
-    val currentColor = Color.hsv(h, 1f, v)
+    val currentColor = Color.hsv(h, s, v)
+
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(currentColor).border(2.dp, Color.Gray, CircleShape))
-        Spacer(modifier = Modifier.height(10.dp))
-        Canvas(modifier = Modifier.fillMaxWidth().height(12.dp).pointerInput(Unit) { detectDragGestures { change, _ -> h = (change.position.x / size.width).coerceIn(0f, 1f) * 360f } }) {
-            val colors = (0..360 step 60).map { Color.hsv(it.toFloat(), 1f, 1f) }
-            drawRect(Brush.horizontalGradient(colors))
+        Box(modifier = Modifier.size(60.dp).clip(CircleShape).background(currentColor).border(2.dp, Color.Gray, CircleShape))
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(t["hue"]!!, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Canvas(modifier = Modifier.fillMaxWidth().height(15.dp).pointerInput(Unit) {
+            detectDragGestures { change, _ -> h = (change.position.x / size.width).coerceIn(0f, 1f) * 360f }
+        }) {
+            drawRect(Brush.horizontalGradient((0..360 step 60).map { Color.hsv(it.toFloat(), 1f, 1f) }))
         }
         Spacer(modifier = Modifier.height(10.dp))
-        Canvas(modifier = Modifier.fillMaxWidth().height(12.dp).pointerInput(Unit) { detectDragGestures { change, _ -> v = (change.position.x / size.width).coerceIn(0f, 1f) } }) {
-            drawRect(Brush.horizontalGradient(listOf(Color.Black, Color.White)))
+        Text(t["sat"]!!, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Canvas(modifier = Modifier.fillMaxWidth().height(15.dp).pointerInput(Unit) {
+            detectDragGestures { change, _ -> s = (change.position.x / size.width).coerceIn(0f, 1f) }
+        }) {
+            drawRect(Brush.horizontalGradient(listOf(Color.White, Color.hsv(h, 1f, 1f))))
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(t["val"]!!, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Canvas(modifier = Modifier.fillMaxWidth().height(15.dp).pointerInput(Unit) {
+            detectDragGestures { change, _ -> v = (change.position.x / size.width).coerceIn(0f, 1f) }
+        }) {
+            drawRect(Brush.horizontalGradient(listOf(Color.Black, Color.hsv(h, s, 1f))))
         }
         onColorSelected(currentColor)
     }
@@ -161,7 +167,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, viewModel: Habi
         topBar = {
             Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                 CenterAlignedTopAppBar(
-                    navigationIcon = { Image(painterResource(R.drawable.logo), null, Modifier.padding(start = 12.dp).size(48.dp).clip(CircleShape)) },
+                    navigationIcon = { Image(painterResource(id = R.drawable.logo), null, modifier = Modifier.padding(start = 12.dp).size(48.dp).clip(CircleShape)) },
                     title = { Text(t["app_name"]!!, fontWeight = FontWeight.ExtraBold) },
                     actions = {
                         IconButton(onClick = { navController.navigate("bin") }) { Icon(Icons.Default.DeleteOutline, null) }
@@ -178,7 +184,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, viewModel: Habi
                 IconButton(onClick = { navController.navigate("manage_categories") }) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { CategoryChipMain(selectedCat == t["all"]!!, t["all"]!!, MaterialTheme.colorScheme.primary) { selectedCat = t["all"]!! } }
-                    items(items = categories, key = { it.id }) { cat -> CategoryChipMain(selectedCat == cat.name, cat.name, Color(cat.color)) { selectedCat = cat.name } }
+                    items(items = categories) { cat -> CategoryChipMain(selectedCat == cat.name, cat.name, Color(cat.color)) { selectedCat = cat.name } }
                 }
             }
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -186,15 +192,9 @@ fun HomeScreen(navController: androidx.navigation.NavController, viewModel: Habi
                     val colorInt = categories.find { it.name == habit.category }?.color ?: Color.Gray.toArgb()
                     HabitCardMain(habit, Color(colorInt), viewModel, t) { navController.navigate("details/${habit.id}") }
                 }
+                item { Spacer(modifier = Modifier.height(32.dp)) }
             }
         }
-    }
-}
-
-@Composable
-fun CategoryChipMain(selected: Boolean, text: String, color: Color, onClick: () -> Unit) {
-    Surface(modifier = Modifier.clickable { onClick() }, color = if (selected) color else MaterialTheme.colorScheme.surfaceVariant.copy(0.5f), shape = RoundedCornerShape(12.dp)) {
-        Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 14.sp)
     }
 }
 
@@ -215,7 +215,8 @@ fun HabitCardMain(habit: Habit, accentColor: Color, viewModel: HabitViewModel, t
                     if (habit.isFavorite) { Spacer(modifier = Modifier.width(8.dp)); Icon(Icons.Default.Bookmark, null, modifier = Modifier.size(14.dp), tint = Color(0xFFFFB703)) }
                 }
                 Text(habit.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                LinearProgressIndicator(progress = progress.coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth(0.8f).padding(top = 8.dp).height(6.dp).clip(CircleShape), color = if(finished) Color(0xFF2D6A4F) else accentColor)
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(progress = progress.coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth(0.8f).height(6.dp).clip(CircleShape), color = if(finished) Color(0xFF2D6A4F) else accentColor)
             }
             IconButton(onClick = { viewModel.setHabitStatus(habit.id, !isDone) }, modifier = Modifier.background(if (isDone) Color(0xFFD8F3DC).copy(0.8f) else MaterialTheme.colorScheme.surfaceVariant, CircleShape)) {
                 Icon(if (isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, tint = if (isDone) Color(0xFF2D6A4F) else Color.LightGray)
@@ -259,7 +260,7 @@ fun AddHabitScreen(navController: androidx.navigation.NavController, viewModel: 
             AlertDialog(onDismissRequest = { showDialog = false }, title = { Text(t["new_category"]!!) }, text = {
                 Column {
                     OutlinedTextField(value = newCatName, onValueChange = { newCatName = it }, label = { Text(t["name_label"]!!) })
-                    Spacer(modifier = Modifier.height(16.dp)); AdvancedColorPickerUI { pickedColor = it }
+                    Spacer(modifier = Modifier.height(16.dp)); AdvancedColorPickerUI(t) { pickedColor = it }
                 }
             }, confirmButton = { TextButton(onClick = { if (newCatName.isNotEmpty()) { viewModel.addCategory(newCatName, pickedColor.toArgb()); selectedCat = newCatName; newCatName = ""; showDialog = false } }) { Text(t["ok"]!!) } })
         }
@@ -279,8 +280,8 @@ fun ManageCategoriesScreen(navController: androidx.navigation.NavController, vie
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(cat.color)))
                         Text(cat.name, modifier = Modifier.weight(1f).padding(start = 16.dp), fontWeight = FontWeight.Bold)
-                        IconButton(onClick = { if(i > 0) viewModel.updateCategoryOrder(categories.toMutableList().apply { Collections.swap(this, i, i-1) }) }) { Icon(Icons.Default.ArrowUpward, null) }
-                        IconButton(onClick = { if(i < categories.size-1) viewModel.updateCategoryOrder(categories.toMutableList().apply { Collections.swap(this, i, i+1) }) }) { Icon(Icons.Default.ArrowDownward, null) }
+                        IconButton(onClick = { if(i > 0) viewModel.updateCategoryOrder(categories.toMutableList().apply { java.util.Collections.swap(this, i, i-1) }) }) { Icon(Icons.Default.ArrowUpward, null) }
+                        IconButton(onClick = { if(i < categories.size-1) viewModel.updateCategoryOrder(categories.toMutableList().apply { java.util.Collections.swap(this, i, i+1) }) }) { Icon(Icons.Default.ArrowDownward, null) }
                         IconButton(onClick = { catToDelete = cat }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
                     }
                 }
@@ -302,6 +303,7 @@ fun BinScreen(navController: androidx.navigation.NavController, viewModel: Habit
     Scaffold(topBar = { TopAppBar(title = { Text(t["bin"]!!) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, null) } }) }) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (delCats.isNotEmpty()) {
+                item { Text(t["bin_cats"]!!, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 8.dp)) }
                 items(items = delCats, key = { "cat_${it.id}" }) { cat ->
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(cat.color).copy(alpha = 0.2f))) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -313,6 +315,7 @@ fun BinScreen(navController: androidx.navigation.NavController, viewModel: Habit
                 }
             }
             if (delHabits.isNotEmpty()) {
+                item { Spacer(modifier = Modifier.height(16.dp)); Text(t["bin_habits"]!!, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 8.dp)) }
                 items(items = delHabits, key = { "hab_${it.id}" }) { habit ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -329,7 +332,7 @@ fun BinScreen(navController: androidx.navigation.NavController, viewModel: Habit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailScreen(navController: androidx.navigation.NavController, viewModel: HabitViewModel, habitId: Int, t: Map<String, String>) {
+fun DetailScreen(navController: androidx.navigation.NavController, viewModel: HabitViewModel, habitId: Int, t: Map<String, String>, lang: AppLanguage) {
     val habits by viewModel.habits.collectAsState()
     val habit = habits.find { it.id == habitId }
 
@@ -342,7 +345,7 @@ fun DetailScreen(navController: androidx.navigation.NavController, viewModel: Ha
     val history by viewModel.getHistoryDates(habitId).collectAsState(emptyList())
     var showDelDialog by remember { mutableStateOf(false) }
     var viewDate by remember { mutableStateOf(Calendar.getInstance()) }
-    val months = listOf("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь")
+    val months = if (lang == AppLanguage.RU) Localization.monthsRU else Localization.monthsEN
 
     Scaffold(topBar = { TopAppBar(title = { Text(habit.title) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, null) } }, actions = {
         IconButton(onClick = { viewModel.toggleFavorite(habit) }) { Icon(if(habit.isFavorite) Icons.Default.Bookmark else Icons.Outlined.StarOutline, null, tint = if(habit.isFavorite) Color(0xFFFFB703) else Color.Gray) }
@@ -405,3 +408,7 @@ fun SettingsScreen(navController: androidx.navigation.NavController, isDark: Boo
             items(items = List(first) { -1 } + (1..days).toList()) { d -> if (d != -1) {
                 val done = historySet.contains(d)
                 Box(modifier = Modifier.size(36.dp).padding(2.dp).clip(CircleShape).background(if (done) color else Color.Transparent).clickable { onDayClick(d) }, contentAlignment = Alignment.Center) { Text(d.toString(), color = if (done) (if(color == Color.White) Color.Black else Color.White) else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp) } } } } } }
+
+@Composable fun CategoryChipMain(selected: Boolean, text: String, color: Color, onClick: () -> Unit) {
+    Surface(modifier = Modifier.clickable { onClick() }, color = if (selected) color else MaterialTheme.colorScheme.surfaceVariant.copy(0.5f), shape = RoundedCornerShape(12.dp)) {
+        Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) } }
