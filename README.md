@@ -19,7 +19,7 @@
 
 | Главный экран | Детали привычки | Выбор цвета | Настройки |
 |:---:|:---:|:---:|:---:|
-| <img src="placeholders/main.png" width="200" /> | <img src="placeholders/details.png" width="200" /> | <img src="placeholders/color.png" width="200" /> | <img src="placeholders/settings.png" width="200" /> |
+| <img src="screens/main.png" width="200" /> | <img src="screens/details.png" width="200" /> | <img src="screens/color.png" width="200" /> | <img src="screens/settings.png" width="200" /> |
 |  |  |  | |
 
 ---
