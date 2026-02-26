@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
@@ -46,7 +48,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.habittracker.data.*
+import com.example.habittracker.data.Habit
+import com.example.habittracker.data.HabitViewModel
+import com.example.habittracker.data.Category
 import java.util.*
 
 enum class AppLanguage { RU, EN }
@@ -64,7 +68,7 @@ object Localization {
             "fill_all" to "Заполни все поля!", "manage_cat" to "Категории", "bin" to "Корзина",
             "restore" to "Восстановить", "confirm_del" to "Удалить?", "cancel" to "Отмена",
             "bin_cats" to "Удаленные категории", "bin_habits" to "Удаленные привычки",
-            "credits" to "Авторство", "credits_text" to "made by 1mmisuck",
+            "credits" to "Credits", "credits_text" to "made by 1mmisuck",
             "hue" to "Цвет", "sat" to "Насыщенность (влево для БЕЛОГО)", "val" to "Яркость (влево для ЧЕРНОГО)",
             "mon" to "П", "tue" to "В", "wed" to "С", "thu" to "Ч", "fri" to "П", "sat" to "С", "sun" to "В"
         ),
@@ -184,7 +188,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, viewModel: Habi
                 IconButton(onClick = { navController.navigate("manage_categories") }) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { CategoryChipMain(selectedCat == t["all"]!!, t["all"]!!, MaterialTheme.colorScheme.primary) { selectedCat = t["all"]!! } }
-                    items(items = categories) { cat -> CategoryChipMain(selectedCat == cat.name, cat.name, Color(cat.color)) { selectedCat = cat.name } }
+                    items(items = categories, key = { it.id }) { cat -> CategoryChipMain(selectedCat == cat.name, cat.name, Color(cat.color)) { selectedCat = cat.name } }
                 }
             }
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -213,6 +217,7 @@ fun HabitCardMain(habit: Habit, accentColor: Color, viewModel: HabitViewModel, t
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(habit.category.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor)
                     if (habit.isFavorite) { Spacer(modifier = Modifier.width(8.dp)); Icon(Icons.Default.Bookmark, null, modifier = Modifier.size(14.dp), tint = Color(0xFFFFB703)) }
+                    if (finished) { Spacer(modifier = Modifier.width(8.dp)); Text(t["completed"]!! + " ✅", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2D6A4F)) }
                 }
                 Text(habit.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -343,13 +348,14 @@ fun DetailScreen(navController: androidx.navigation.NavController, viewModel: Ha
     val colorInt = categories.find { it.name == habit.category }?.color ?: Color.Gray.toArgb()
     val color = Color(colorInt)
     val history by viewModel.getHistoryDates(habitId).collectAsState(emptyList())
-    var showDelDialog by remember { mutableStateOf(false) }
     var viewDate by remember { mutableStateOf(Calendar.getInstance()) }
+
+    var localNote by remember { mutableStateOf(habit.description) }
     val months = if (lang == AppLanguage.RU) Localization.monthsRU else Localization.monthsEN
 
     Scaffold(topBar = { TopAppBar(title = { Text(habit.title) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, null) } }, actions = {
         IconButton(onClick = { viewModel.toggleFavorite(habit) }) { Icon(if(habit.isFavorite) Icons.Default.Bookmark else Icons.Outlined.StarOutline, null, tint = if(habit.isFavorite) Color(0xFFFFB703) else Color.Gray) }
-        IconButton(onClick = { showDelDialog = true }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+        IconButton(onClick = { viewModel.softDeleteHabit(habit) }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
     }) }) { padding ->
         LazyColumn(modifier = Modifier.padding(padding).padding(20.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
@@ -364,12 +370,18 @@ fun DetailScreen(navController: androidx.navigation.NavController, viewModel: Ha
                     }
                 }
             }
-            item { Text(t["note_label"]!!, fontWeight = FontWeight.Bold); OutlinedTextField(value = habit.description, onValueChange = { viewModel.updateHabitNote(habit, it) }, modifier = Modifier.fillMaxWidth().height(120.dp), shape = RoundedCornerShape(16.dp)) }
-        }
-        if (showDelDialog) {
-            AlertDialog(onDismissRequest = { showDelDialog = false }, title = { Text(t["delete"]!!) }, text = { Text(t["confirm_del"]!!) },
-                confirmButton = { TextButton(onClick = { viewModel.softDeleteHabit(habit); showDelDialog = false }) { Text(t["ok"]!!, color = Color.Red) } },
-                dismissButton = { TextButton(onClick = { showDelDialog = false }) { Text(t["cancel"]!!) } })
+            item {
+                Text(t["note_label"]!!, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = localNote,
+                    onValueChange = {
+                        localNote = it
+                        viewModel.updateHabitNote(habit, it)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
         }
     }
 }
@@ -385,7 +397,7 @@ fun SettingsScreen(navController: androidx.navigation.NavController, isDark: Boo
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(t["dark_theme"]!!, fontWeight = FontWeight.Bold); Switch(checked = isDark, onCheckedChange = onThemeChange) }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                     Text(t["language"]!!, fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(selected = lang == AppLanguage.RU, onClick = { onLangChange(AppLanguage.RU) }, label = { Text("Русский") })
                         FilterChip(selected = lang == AppLanguage.EN, onClick = { onLangChange(AppLanguage.EN) }, label = { Text("English") })
                     }
@@ -410,5 +422,5 @@ fun SettingsScreen(navController: androidx.navigation.NavController, isDark: Boo
                 Box(modifier = Modifier.size(36.dp).padding(2.dp).clip(CircleShape).background(if (done) color else Color.Transparent).clickable { onDayClick(d) }, contentAlignment = Alignment.Center) { Text(d.toString(), color = if (done) (if(color == Color.White) Color.Black else Color.White) else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp) } } } } } }
 
 @Composable fun CategoryChipMain(selected: Boolean, text: String, color: Color, onClick: () -> Unit) {
-    Surface(modifier = Modifier.clickable { onClick() }, color = if (selected) color else MaterialTheme.colorScheme.surfaceVariant.copy(0.5f), shape = RoundedCornerShape(12.dp)) {
+    Surface(modifier = Modifier.clickable { onClick() }, color = if (selected) color else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape = RoundedCornerShape(12.dp)) {
         Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) } }
